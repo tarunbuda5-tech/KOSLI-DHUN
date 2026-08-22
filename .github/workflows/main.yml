@@ -1,38 +1,116 @@
-name: Build Android APK
+name: Update Sambalpuri Songs
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 * * * *"
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  update-songs:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          flutter-version: '3.35.0'
-          channel: stable
+          python-version: "3.x"
 
-      - name: Create Android project
-        run: flutter create --platforms=android .
-
-      - name: Flutter Pub Get
-        run: flutter pub get
-
-      - name: Build APK
+      - name: Fetch YouTube Sambalpuri Songs
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        run: flutter build apk --release
+        run: |
+          python - <<'PY'
+          import os
+          import json
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone, timedelta
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: KOSLI-DHUN-Android
-          path: build/app/outputs/flutter-apk/app-release.apk
+          API_KEY = os.environ["YOUTUBE_API_KEY"]
+
+          queries = [
+              "Sambalpuri song",
+              "Sambalpuri music",
+              "Sambalpuri new song",
+              "Sambalpuri video"
+          ]
+
+          songs = {}
+
+          published_after = (
+              datetime.now(timezone.utc) - timedelta(days=7)
+          ).isoformat().replace("+00:00", "Z")
+
+          for query in queries:
+              params = urllib.parse.urlencode({
+                  "part": "snippet",
+                  "q": query,
+                  "type": "video",
+                  "order": "date",
+                  "maxResults": 50,
+                  "publishedAfter": published_after,
+                  "key": API_KEY
+              })
+
+              url = (
+                  "https://www.googleapis.com/youtube/v3/search?"
+                  + params
+              )
+
+              try:
+                  with urllib.request.urlopen(url) as response:
+                      data = json.load(response)
+              except Exception as e:
+                  print("API error:", e)
+                  continue
+
+              for item in data.get("items", []):
+                  video_id = item["id"].get("videoId")
+                  if not video_id:
+                      continue
+
+                  snippet = item["snippet"]
+
+                  songs[video_id] = {
+                      "id": video_id,
+                      "title": snippet.get("title", ""),
+                      "channel": snippet.get("channelTitle", ""),
+                      "publishedAt": snippet.get("publishedAt", ""),
+                      "thumbnail": (
+                          "https://i.ytimg.com/vi/"
+                          + video_id
+                          + "/hqdefault.jpg"
+                      ),
+                      "youtubeUrl": (
+                          "https://www.youtube.com/watch?v="
+                          + video_id
+                      )
+                  }
+
+          result = list(songs.values())
+          result.sort(
+              key=lambda x: x.get("publishedAt", ""),
+              reverse=True
+          )
+
+          os.makedirs("data", exist_ok=True)
+
+          with open("data/songs.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, ensure_ascii=False, indent=2)
+
+          print("Total songs:", len(result))
+          PY
+
+      - name: Commit updated songs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/songs.json
+          git diff --cached --quiet || git commit -m "Auto update Sambalpuri songs"
+          git push
