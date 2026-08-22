@@ -14,9 +14,9 @@ class KosliDhunApp extends StatelessWidget {
       title: 'KOSLI DHUN',
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0B0F),
+        scaffoldBackgroundColor: const Color(0xFF090909),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepOrange,
+          seedColor: const Color(0xFFFF1744),
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
@@ -35,7 +35,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int selectedIndex = 0;
-  int playingIndex = -1;
+  int? playingIndex;
 
   final List<Map<String, String>> songs = [
     {
@@ -54,6 +54,10 @@ class _HomePageState extends State<HomePage> {
       'title': 'New Sambalpuri Beat',
       'artist': 'KOSLI DHUN',
     },
+    {
+      'title': 'Sambalpuri Romantic',
+      'artist': 'Kosli Artist',
+    },
   ];
 
   void playSong(int index) {
@@ -63,7 +67,9 @@ class _HomePageState extends State<HomePage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Playing: ${songs[index]['title']}'),
+        content: Text(
+          'Playing: ${songs[index]['title']}',
+        ),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -72,15 +78,35 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: selectedIndex == 0
-            ? _homeScreen()
-            : selectedIndex == 1
-                ? _searchScreen()
-                : _libraryScreen(),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF090909),
+        title: const Text(
+          'KOSLI DHUN 🎵',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              setState(() {
+                selectedIndex = 1;
+              });
+            },
+          ),
+        ],
       ),
+
+      body: selectedIndex == 0
+          ? homeScreen()
+          : selectedIndex == 1
+              ? searchScreen()
+              : libraryScreen(),
+
       bottomNavigationBar: NavigationBar(
-        backgroundColor: const Color(0xFF111116),
+        backgroundColor: const Color(0xFF111111),
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) {
           setState(() {
@@ -104,223 +130,322 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+
+      bottomSheet: playingIndex != null
+          ? miniPlayer()
+          : null,
     );
   }
 
-  Widget _homeScreen() {
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          backgroundColor: const Color(0xFF0B0B0F),
-          floating: true,
-          title: const Text(
-            'KOSLI DHUN',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-            ),
-          ),
-          actions: [
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  selectedIndex = 1;
-                });
-              },
-              icon: const Icon(Icons.search),
-            ),
-          ],
-        ),
-
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-            child: Container(
-              height: 190,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFE65100),
-                    Color(0xFF8E24AA),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'SAMBALPURI MUSIC',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Feel the beat.\nFeel Sambalpuri.',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    ElevatedButton(
-                      onPressed: () => playSong(0),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                      ),
-                      child: const Text('Play Now'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 14),
-            child: Text(
-              'Popular Songs',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final song = songs[index];
-              final isPlaying = playingIndex == index;
-
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 5,
-                ),
-                leading: Container(
-                  width: 55,
-                  height: 55,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFE65100),
-                        Color(0xFF6A1B9A),
-                      ],
-                    ),
-                  ),
-                  child: Icon(
-                    isPlaying
-                        ? Icons.equalizer
-                        : Icons.music_note,
-                    color: Colors.white,
-                  ),
-                ),
-                title: Text(
-                  song['title']!,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(song['artist']!),
-                trailing: IconButton(
-                  onPressed: () => playSong(index),
-                  icon: Icon(
-                    isPlaying
-                        ? Icons.pause_circle
-                        : Icons.play_circle_fill,
-                    size: 34,
-                  ),
-                ),
-                onTap: () => playSong(index),
-              );
-            },
-            childCount: songs.length,
-          ),
-        ),
-
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 30),
-        ),
-      ],
-    );
-  }
-
-  Widget _searchScreen() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget homeScreen() {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
         children: [
-          const SizedBox(height: 20),
           const Text(
-            'Search',
+            'Welcome to',
             style: TextStyle(
-              fontSize: 30,
+              color: Colors.white60,
+              fontSize: 15,
+            ),
+          ),
+
+          const SizedBox(height: 3),
+
+          const Text(
+            'Sambalpuri Music 🎶',
+            style: TextStyle(
+              fontSize: 28,
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 20),
-          TextField(
-            decoration: InputDecoration(
-              hintText: 'Search songs, artists...',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: const Color(0xFF18181E),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
+
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFFF1744),
+                  Color(0xFF8B001F),
+                ],
               ),
             ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'KOSLI DHUN',
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Your Sambalpuri Music Destination',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 30),
+
+          const SizedBox(height: 28),
+
           const Text(
-            'Browse Sambalpuri Music',
+            '🔥 Popular Songs',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 21,
               fontWeight: FontWeight.bold,
             ),
+          ),
+
+          const SizedBox(height: 12),
+
+          ...List.generate(
+            songs.length,
+            (index) => songCard(index),
           ),
         ],
       ),
     );
   }
 
-  Widget _libraryScreen() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.library_music,
-            size: 70,
-            color: Colors.deepOrange,
+  Widget songCard(int index) {
+    final song = songs[index];
+    final isPlaying = playingIndex == index;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151515),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 5,
+        ),
+
+        leading: Container(
+          width: 55,
+          height: 55,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFFFF1744),
+                Color(0xFF6A0019),
+              ],
+            ),
           ),
-          SizedBox(height: 15),
-          Text(
+          child: const Icon(
+            Icons.music_note,
+            color: Colors.white,
+            size: 28,
+          ),
+        ),
+
+        title: Text(
+          song['title']!,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        subtitle: Text(
+          song['artist']!,
+          style: const TextStyle(
+            color: Colors.white54,
+          ),
+        ),
+
+        trailing: IconButton(
+          icon: Icon(
+            isPlaying
+                ? Icons.pause_circle_filled
+                : Icons.play_circle_fill,
+            color: const Color(0xFFFF1744),
+            size: 34,
+          ),
+          onPressed: () {
+            playSong(index);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget searchScreen() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Search Sambalpuri songs...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: const Color(0xFF181818),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Expanded(
+              child: ListView.builder(
+                itemCount: songs.length,
+                itemBuilder: (context, index) {
+                  return songCard(index);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget libraryScreen() {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
             'Your Library',
             style: TextStyle(
-              fontSize: 26,
+              fontSize: 28,
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            'Your favourite songs will appear here.',
-            style: TextStyle(color: Colors.grey),
+
+          const SizedBox(height: 20),
+
+          libraryTile(
+            Icons.favorite,
+            'Favourite Songs',
+            'Your liked songs',
+          ),
+
+          libraryTile(
+            Icons.history,
+            'Recently Played',
+            'Songs you recently played',
+          ),
+
+          libraryTile(
+            Icons.download,
+            'Downloads',
+            'Your downloaded music',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget libraryTile(
+    IconData icon,
+    String title,
+    String subtitle,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151515),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: const Color(0xFFFF1744),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+        ),
+      ),
+    );
+  }
+
+  Widget miniPlayer() {
+    final song = songs[playingIndex!];
+
+    return Container(
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF202020),
+        border: Border(
+          top: BorderSide(
+            color: Color(0xFF333333),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 45,
+            height: 45,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFFF1744),
+            ),
+            child: const Icon(Icons.music_note),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  song['title']!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  song['artist']!,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          IconButton(
+            icon: const Icon(
+              Icons.pause_circle,
+              color: Color(0xFFFF1744),
+            ),
+            onPressed: () {
+              setState(() {
+                playingIndex = null;
+              });
+            },
           ),
         ],
       ),
