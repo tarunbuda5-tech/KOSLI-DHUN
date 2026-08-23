@@ -1,30 +1,55 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 void main() {
-  runApp(const KosliDhunApp());
+  runApp(const KosliDhun());
 }
 
-class KosliDhunApp extends StatelessWidget {
-  const KosliDhunApp({super.key});
+class KosliDhun extends StatelessWidget {
+  const KosliDhun({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'KOSLI DHUN',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0B0B),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.orange,
-          brightness: Brightness.dark,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0D0D0D),
+        colorScheme: ColorScheme.dark(
+          primary: Colors.orange,
+          secondary: Colors.orangeAccent,
         ),
-        useMaterial3: true,
       ),
       home: const HomePage(),
+    );
+  }
+}
+
+class Song {
+  final String id;
+  final String title;
+  final String channel;
+  final String thumbnail;
+  final String youtubeUrl;
+
+  Song({
+    required this.id,
+    required this.title,
+    required this.channel,
+    required this.thumbnail,
+    required this.youtubeUrl,
+  });
+
+  factory Song.fromJson(Map<String, dynamic> json) {
+    return Song(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Unknown Song',
+      channel: json['channel']?.toString() ?? '',
+      thumbnail: json['thumbnail']?.toString() ?? '',
+      youtubeUrl: json['youtubeUrl']?.toString() ?? '',
     );
   }
 }
@@ -37,10 +62,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<dynamic> songs = [];
-  List<dynamic> filteredSongs = [];
+  List<Song> songs = [];
+  List<Song> filteredSongs = [];
+
   bool loading = true;
-  String searchText = '';
+  String errorMessage = '';
+
+  final TextEditingController searchController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -50,234 +79,377 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> loadSongs() async {
     try {
-      final jsonString = await rootBundle.loadString('data/songs.json');
-      final data = json.decode(jsonString);
+      final response = await http.get(
+        Uri.parse(
+          'https://raw.githubusercontent.com/tarunbuda5-tech/KOSLI-DHUN/main/data/songs.json',
+        ),
+      );
 
-      if (data is List) {
-        setState(() {
-          songs = data;
-          filteredSongs = data;
-          loading = false;
-        });
+      if (response.statusCode != 200) {
+        throw Exception('Songs load failed');
       }
+
+      final List<dynamic> data = jsonDecode(response.body);
+
+      final loadedSongs = data
+          .map((item) => Song.fromJson(item))
+          .where((song) => song.id.isNotEmpty)
+          .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        songs = loadedSongs;
+        filteredSongs = loadedSongs;
+        loading = false;
+      });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         loading = false;
+        errorMessage = 'Songs load nahi ho paaye.';
       });
     }
   }
 
-  void searchSongs(String value) {
+  void searchSongs(String query) {
+    final text = query.toLowerCase().trim();
+
     setState(() {
-      searchText = value.toLowerCase();
-
-      filteredSongs = songs.where((song) {
-        final title = (song['title'] ?? '').toString().toLowerCase();
-        final channel = (song['channel'] ?? '').toString().toLowerCase();
-
-        return title.contains(searchText) ||
-            channel.contains(searchText);
-      }).toList();
+      if (text.isEmpty) {
+        filteredSongs = songs;
+      } else {
+        filteredSongs = songs.where((song) {
+          return song.title.toLowerCase().contains(text) ||
+              song.channel.toLowerCase().contains(text);
+        }).toList();
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: const Color(0xFF0D0D0D),
+        elevation: 0,
         title: const Text(
-          'KOSLI DHUN',
+          'KOSLI DHUN 🎵',
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
         ),
-        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: loadSongs,
+          ),
+        ],
       ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: TextField(
-                    onChanged: searchSongs,
-                    decoration: InputDecoration(
-                      hintText: 'Search Sambalpuri songs...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: Colors.white10,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: TextField(
+              controller: searchController,
+              onChanged: searchSongs,
+              decoration: InputDecoration(
+                hintText: 'Song search karo...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          searchController.clear();
+                          searchSongs('');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFF1A1A1A),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+
+          Expanded(
+            child: loading
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                : errorMessage.isNotEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment:
+                              MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              size: 55,
+                              color: Colors.orange,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(errorMessage),
+                            const SizedBox(height: 15),
+                            ElevatedButton(
+                              onPressed: loadSongs,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : filteredSongs.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Koi song nahi mila 🎵',
+                              style: TextStyle(fontSize: 18),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: loadSongs,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.only(
+                                bottom: 20,
+                              ),
+                              itemCount: filteredSongs.length,
+                              itemBuilder: (context, index) {
+                                final song =
+                                    filteredSongs[index];
+
+                                return SongCard(
+                                  song: song,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            PlayerPage(song: song),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SongCard extends StatelessWidget {
+  final Song song;
+  final VoidCallback onTap;
+
+  const SongCard({
+    super.key,
+    required this.song,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFF171717),
+      margin: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  song.thumbnail.isNotEmpty
+                      ? song.thumbnail
+                      : 'https://i.ytimg.com/vi/${song.id}/hqdefault.jpg',
+                  width: 110,
+                  height: 70,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 110,
+                      height: 70,
+                      color: Colors.black,
+                      child: const Icon(
+                        Icons.music_note,
+                        color: Colors.orange,
+                        size: 35,
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      song.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      song.channel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
 
-                Expanded(
-                  child: filteredSongs.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No songs found',
-                            style: TextStyle(fontSize: 18),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
-                          itemCount: filteredSongs.length,
-                          itemBuilder: (context, index) {
-                            final song = filteredSongs[index];
+              const Icon(
+                Icons.play_circle_fill,
+                color: Colors.orange,
+                size: 40,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-                            final title =
-                                (song['title'] ?? 'Unknown Song')
-                                    .toString();
+class PlayerPage extends StatefulWidget {
+  final Song song;
 
-                            final channel =
-                                (song['channel'] ?? 'Unknown Artist')
-                                    .toString();
+  const PlayerPage({
+    super.key,
+    required this.song,
+  });
 
-                            final thumbnail =
-                                (song['thumbnail'] ?? '')
-                                    .toString();
+  @override
+  State<PlayerPage> createState() => _PlayerPageState();
+}
 
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              color: Colors.white10,
-                              child: ListTile(
-                                contentPadding:
-                                    const EdgeInsets.all(8),
-                                leading: ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.circular(10),
-                                  child: thumbnail.isNotEmpty
-                                      ? Image.network(
-                                          thumbnail,
-                                          width: 70,
-                                          height: 70,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stack) {
-                                            return Container(
-                                              width: 70,
-                                              height: 70,
-                                              color: Colors.white12,
-                                              child: const Icon(
-                                                Icons.music_note,
-                                                size: 32,
-                                              ),
-                                            );
-                                          },
-                                        )
-                                      : Container(
-                                          width: 70,
-                                          height: 70,
-                                          color: Colors.white12,
-                                          child: const Icon(
-                                            Icons.music_note,
-                                            size: 32,
-                                          ),
-                                        ),
-                                ),
-                                title: Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 5),
-                                  child: Text(
-                                    channel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                trailing: const Icon(
-                                  Icons.play_circle_fill,
-                                  color: Colors.orange,
-                                  size: 36,
-                                ),
-                                onTap: () {
-                                  showSongDetails(song);
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+class _PlayerPageState extends State<PlayerPage> {
+  late YoutubePlayerController controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    controller = YoutubePlayerController.fromVideoId(
+      videoId: widget.song.id,
+      autoPlay: true,
+      params: const YoutubePlayerParams(
+        showControls: true,
+        showFullscreenButton: true,
+        enableCaption: true,
+        strictRelatedVideos: true,
+      ),
     );
   }
 
-  void showSongDetails(dynamic song) {
-    final title = (song['title'] ?? 'Unknown Song').toString();
-    final channel = (song['channel'] ?? 'Unknown Artist').toString();
-    final youtubeUrl =
-        (song['youtubeUrl'] ?? '').toString();
+  @override
+  void dispose() {
+    controller.close();
+    super.dispose();
+  }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF151515),
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  channel,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: youtubeUrl),
-                      );
-
-                      Navigator.pop(context);
-
-                      ScaffoldMessenger.of(this.context)
-                          .showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'YouTube link copied',
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.link),
-                    label: const Text('Copy YouTube Link'),
-                  ),
-                ),
-              ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Now Playing'),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            YoutubePlayer(
+              controller: controller,
+              aspectRatio: 16 / 9,
             ),
-          ),
-        );
-      },
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.song.title,
+                    style: const TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    widget.song.channel,
+                    style: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 15,
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            controller.playVideo();
+                          },
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Play'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            controller.pauseVideo();
+                          },
+                          icon: const Icon(Icons.pause),
+                          label: const Text('Pause'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
