@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
 
   // GitHub repository ka songs.json
   final String songsUrl =
-      'https://raw.githubusercontent.com/tarunbuda5-tech/KOSLI-DHUN/main/data/songs.json';
+    'https://github.com/tarunbuda5-tech/KOSLI-DHUN/raw/refs/heads/main/data/songs.json';
 
   @override
   void initState() {
