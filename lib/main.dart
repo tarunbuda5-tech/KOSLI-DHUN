@@ -17,7 +17,7 @@ class KosliDhun extends StatelessWidget {
       title: 'KOSLI DHUN',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0D0D0D),
-        colorScheme: ColorScheme.dark(
+        colorScheme: const ColorScheme.dark(
           primary: Colors.orange,
           secondary: Colors.orangeAccent,
         ),
@@ -43,34 +43,41 @@ class Song {
   });
 
   factory Song.fromJson(Map<String, dynamic> json) {
-    final youtubeUrl = json['youtubeUrl']?.toString() ?? '';
+    final youtubeUrl =
+        json['youtubeUrl']?.toString() ??
+        json['youtube_url']?.toString() ??
+        json['url']?.toString() ??
+        json['videoUrl']?.toString() ??
+        '';
+
+    String videoId = '';
+
+    // Pehle YouTube URL se ID nikalo
+    if (youtubeUrl.isNotEmpty) {
+      videoId =
+          YoutubePlayerController.convertUrlToId(youtubeUrl) ?? '';
+    }
+
+    // Agar URL se ID nahi mili to id field check karo
+    if (videoId.isEmpty) {
+      final rawId = json['id']?.toString() ?? '';
+
+      videoId =
+          YoutubePlayerController.convertUrlToId(rawId) ??
+          rawId;
+    }
 
     return Song(
-      id: json['id']?.toString() ?? extractYoutubeId(youtubeUrl),
+      id: videoId,
       title: json['title']?.toString() ?? 'Unknown Song',
-      channel: json['channel']?.toString() ?? 'Sambalpuri Music',
+      channel:
+          json['channel']?.toString() ??
+          json['artist']?.toString() ??
+          'Sambalpuri Music',
       thumbnail: json['thumbnail']?.toString() ?? '',
       youtubeUrl: youtubeUrl,
     );
   }
-}
-
-String extractYoutubeId(String url) {
-  if (url.isEmpty) return '';
-
-  final uri = Uri.tryParse(url);
-
-  if (uri != null) {
-    if (uri.host.contains('youtu.be')) {
-      return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
-    }
-
-    if (uri.host.contains('youtube.com')) {
-      return uri.queryParameters['v'] ?? '';
-    }
-  }
-
-  return url;
 }
 
 class HomePage extends StatefulWidget {
@@ -90,9 +97,8 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController searchController =
       TextEditingController();
 
-  // GitHub repository ka songs.json
   final String songsUrl =
-    'https://github.com/tarunbuda5-tech/KOSLI-DHUN/raw/refs/heads/main/data/songs.json';
+      'https://raw.githubusercontent.com/tarunbuda5-tech/KOSLI-DHUN/main/data/songs.json';
 
   @override
   void initState() {
@@ -209,15 +215,6 @@ class _HomePageState extends State<HomePage> {
               decoration: InputDecoration(
                 hintText: 'Search Sambalpuri songs...',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: searchController.text.isNotEmpty
-                    ? IconButton(
-                        onPressed: () {
-                          searchController.clear();
-                          searchSongs('');
-                        },
-                        icon: const Icon(Icons.clear),
-                      )
-                    : null,
                 filled: true,
                 fillColor: const Color(0xFF1A1A1A),
                 border: OutlineInputBorder(
@@ -336,6 +333,15 @@ class SongCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () {
+          if (song.id.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('YouTube video ID nahi mila'),
+              ),
+            );
+            return;
+          }
+
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -434,7 +440,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  late YoutubePlayerController controller;
+  late final YoutubePlayerController controller;
 
   @override
   void initState() {
@@ -446,8 +452,10 @@ class _PlayerPageState extends State<PlayerPage> {
       params: const YoutubePlayerParams(
         showControls: true,
         showFullscreenButton: true,
-        enableCaption: true,
+        mute: false,
+        enableCaption: false,
         strictRelatedVideos: true,
+        privacyEnhancedMode: true,
       ),
     );
   }
@@ -507,9 +515,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       onPressed: () {
                         controller.playVideo();
                       },
-                      icon: const Icon(
-                        Icons.play_arrow,
-                      ),
+                      icon: const Icon(Icons.play_arrow),
                       label: const Text(
                         'PLAY SONG',
                         style: TextStyle(
