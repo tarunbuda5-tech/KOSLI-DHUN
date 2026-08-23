@@ -3,7 +3,7 @@ name: Update Sambalpuri Songs
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 */6 * * *"
 
 permissions:
   contents: write
@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -21,7 +22,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Fetch YouTube Sambalpuri Songs
+      - name: Fetch Sambalpuri Songs
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: |
@@ -34,20 +35,41 @@ jobs:
 
           API_KEY = os.environ["YOUTUBE_API_KEY"]
 
+          # Only music/song searches
           queries = [
-              "Sambalpuri song",
-              "Sambalpuri music",
-              "Sambalpuri new song",
-              "Sambalpuri video"
+              "Sambalpuri song official",
+              "Sambalpuri new song official",
+              "Sambalpuri music official",
+              "Sambalpuri audio song official",
+              "Sambalpuri hit song official",
+              "Sambalpuri old song official"
           ]
 
           songs = {}
 
           published_after = (
-              datetime.now(timezone.utc) - timedelta(days=7)
+              datetime.now(timezone.utc) - timedelta(days=30)
           ).isoformat().replace("+00:00", "Z")
 
+          # Words which usually indicate Shorts/status/reels
+          blocked_words = [
+              "#shorts",
+              "shorts",
+              "short video",
+              "status video",
+              "whatsapp status",
+              "reels",
+              "reel",
+              "dance video",
+              "dance shorts",
+              "viral shorts",
+              "shorts video",
+              "status",
+              "dance"
+          ]
+
           for query in queries:
+
               params = urllib.parse.urlencode({
                   "part": "snippet",
                   "q": query,
@@ -58,42 +80,119 @@ jobs:
                   "key": API_KEY
               })
 
-              url = (
+              search_url = (
                   "https://www.googleapis.com/youtube/v3/search?"
                   + params
               )
 
               try:
-                  with urllib.request.urlopen(url) as response:
+                  with urllib.request.urlopen(search_url) as response:
                       data = json.load(response)
+
               except Exception as e:
-                  print("API error:", e)
+                  print("Search API error:", e)
                   continue
 
+              video_ids = []
+
               for item in data.get("items", []):
-                  video_id = item["id"].get("videoId")
+                  video_id = item.get("id", {}).get("videoId")
+
+                  if video_id:
+                      video_ids.append(video_id)
+
+              if not video_ids:
+                  continue
+
+              # Get video duration
+              video_params = urllib.parse.urlencode({
+                  "part": "snippet,contentDetails",
+                  "id": ",".join(video_ids),
+                  "key": API_KEY
+              })
+
+              video_url = (
+                  "https://www.googleapis.com/youtube/v3/videos?"
+                  + video_params
+              )
+
+              try:
+                  with urllib.request.urlopen(video_url) as response:
+                      video_data = json.load(response)
+
+              except Exception as e:
+                  print("Video API error:", e)
+                  continue
+
+              for item in video_data.get("items", []):
+
+                  video_id = item.get("id")
+
                   if not video_id:
                       continue
 
-                  snippet = item["snippet"]
+                  snippet = item.get("snippet", {})
+                  title = snippet.get("title", "")
+                  title_lower = title.lower()
+
+                  # Remove Shorts / Reels / Status / Dance videos
+                  if any(word in title_lower for word in blocked_words):
+                      continue
+
+                  # Get duration
+                  duration = item.get("contentDetails", {}).get(
+                      "duration", ""
+                  )
+
+                  # Convert ISO 8601 duration to seconds
+                  import re
+
+                  match = re.match(
+                      r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?",
+                      duration
+                  )
+
+                  if not match:
+                      continue
+
+                  hours = int(match.group(1) or 0)
+                  minutes = int(match.group(2) or 0)
+                  seconds = int(match.group(3) or 0)
+
+                  total_seconds = (
+                      hours * 3600 +
+                      minutes * 60 +
+                      seconds
+                  )
+
+                  # Remove Shorts / very short clips
+                  # Normal songs are usually longer than 2 minutes
+                  if total_seconds < 120:
+                      continue
+
+                  thumbnail = (
+                      "https://i.ytimg.com/vi/"
+                      + video_id
+                      + "/hqdefault.jpg"
+                  )
 
                   songs[video_id] = {
                       "id": video_id,
-                      "title": snippet.get("title", ""),
+                      "title": title,
                       "channel": snippet.get("channelTitle", ""),
                       "publishedAt": snippet.get("publishedAt", ""),
-                      "thumbnail": (
-                          "https://i.ytimg.com/vi/"
-                          + video_id
-                          + "/hqdefault.jpg"
-                      ),
+                      "duration": total_seconds,
+                      "thumbnail": thumbnail,
                       "youtubeUrl": (
                           "https://www.youtube.com/watch?v="
                           + video_id
                       )
                   }
 
+          # Convert dictionary to list
           result = list(songs.values())
+
+          # Newest songs first
           result.sort(
               key=lambda x: x.get("publishedAt", ""),
               reverse=True
@@ -101,16 +200,30 @@ jobs:
 
           os.makedirs("data", exist_ok=True)
 
-          with open("data/songs.json", "w", encoding="utf-8") as f:
-              json.dump(result, f, ensure_ascii=False, indent=2)
+          with open(
+              "data/songs.json",
+              "w",
+              encoding="utf-8"
+          ) as f:
+              json.dump(
+                  result,
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
 
-          print("Total songs:", len(result))
+          print("================================")
+          print("Total songs added:", len(result))
+          print("================================")
           PY
 
       - name: Commit updated songs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add data/songs.json
+
           git diff --cached --quiet || git commit -m "Auto update Sambalpuri songs"
+
           git push
