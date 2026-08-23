@@ -455,7 +455,7 @@ class _PlayerPageState extends State<PlayerPage> {
         mute: false,
         enableCaption: false,
         strictRelatedVideos: true,
-        privacyEnhancedMode: true,
+        
       ),
     );
   }
